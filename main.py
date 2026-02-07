@@ -22,20 +22,10 @@ FFMPEG_OPTIONS = {
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+# Отключаем стандартный help, чтобы создать свой
+bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 
 queues = {}
-
-# --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ СТАТУСА ---
-
-
-async def set_music_status(title=None):
-    if title:
-        # Статус "Слушает [Название песни]"
-        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=title))
-    else:
-        # Статус по умолчанию, когда музыка не играет
-        await bot.change_presence(activity=discord.Game(name="!play | Ожидаю музыку"))
 
 # --- ИНТЕРФЕЙС ---
 
@@ -69,7 +59,6 @@ class MusicControlView(discord.ui.View):
         vc = interaction.guild.voice_client
         if vc:
             await vc.disconnect()
-            await set_music_status(None)  # Сбрасываем статус при выходе
             await interaction.response.send_message("👋 Пока!", ephemeral=True)
 
 # --- ЛОГИКА ---
@@ -80,9 +69,6 @@ def play_next(ctx):
     if guild_id in queues and queues[guild_id]:
         url2, title = queues[guild_id].popleft()
 
-        # Обновляем статус для следующей песни
-        asyncio.run_coroutine_threadsafe(set_music_status(title), bot.loop)
-
         source = discord.FFmpegPCMAudio(url2, **FFMPEG_OPTIONS)
         ctx.voice_client.play(source, after=lambda e: play_next(ctx))
 
@@ -90,9 +76,34 @@ def play_next(ctx):
                               description=title, color=discord.Color.green())
         asyncio.run_coroutine_threadsafe(
             ctx.send(embed=embed, view=MusicControlView(ctx)), bot.loop)
-    else:
-        # Если очередь пуста, ставим обычный статус
-        asyncio.run_coroutine_threadsafe(set_music_status(None), bot.loop)
+
+
+@bot.command(name='help')
+async def help_command(ctx):
+    embed = discord.Embed(
+        title="📚 Справка по командам",
+        description="Вот что я умею:",
+        color=discord.Color.gold()
+    )
+    embed.add_field(
+        name="Основные команды",
+        value=(
+            "`!play [название/ссылка]` — Найти и включить музыку.\n"
+            "`!help` — Показать это сообщение."
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="Управление плеером",
+        value=(
+            "**⏸ Пауза/Плей** — Остановить или продолжить трек.\n"
+            "**⏭ Пропустить** — Переключить на следующую песню в очереди.\n"
+            "**🚪 Выгнать** — Остановить музыку и отключить бота от канала."
+        ),
+        inline=False
+    )
+    embed.set_footer(text="Приятного прослушивания! 🎧")
+    await ctx.send(embed=embed)
 
 
 @bot.command(name='play')
@@ -127,9 +138,6 @@ async def play(ctx, *, search: str):
             await ctx.send(f"📝 **{title}** добавлена в очередь!")
         else:
             try:
-                # Обновляем статус при начале игры
-                await set_music_status(title)
-
                 source = discord.FFmpegPCMAudio(url2, **FFMPEG_OPTIONS)
                 ctx.voice_client.play(source, after=lambda e: play_next(ctx))
 
@@ -144,7 +152,7 @@ async def play(ctx, *, search: str):
 
 @bot.event
 async def on_ready():
-    await set_music_status(None)  # Устанавливаем начальный статус
+    await bot.change_presence(activity=discord.Game(name="!help"))
     print(f'Бот {bot.user.name} онлайн!')
 
 bot.run(TOKEN)
