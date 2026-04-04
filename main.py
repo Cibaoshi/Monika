@@ -22,7 +22,7 @@ FFMPEG_OPTIONS = {
 
 intents = discord.Intents.default()
 intents.message_content = True
-# Отключаем стандартный help, чтобы создать свой
+
 bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 
 queues = {}
